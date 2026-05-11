@@ -388,6 +388,16 @@ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-weight:7
 .badge-auto{background:var(--info-bg);color:var(--info-ink);}
 .badge-force{background:var(--warn-bg);color:var(--warn-ink);}
 .badge-off{background:#f0f0f0;color:#555;}
+.update-banner{display:none;background:#1a1a2e;color:#e8e8f0;border-radius:16px;
+padding:18px 22px;margin-bottom:18px;
+font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
+.update-banner .update-title{font-size:.95rem;font-weight:700;margin-bottom:4px;}
+.update-banner .update-notes{font-size:.82rem;opacity:.75;margin-bottom:14px;}
+.update-banner .btn-update{background:#4f8ef7;color:#fff;border:0;border-radius:999px;
+padding:11px 24px;font-size:.9rem;font-weight:600;cursor:pointer;width:100%;
+font-family:inherit;transition:background .15s;}
+.update-banner .btn-update:hover{background:#3a7de0;}
+.update-banner .btn-update:disabled{opacity:.5;cursor:not-allowed;}
 .upload-area{border:2px dashed var(--line);border-radius:14px;padding:28px 20px;
 text-align:center;cursor:pointer;transition:border-color .2s,background .2s;
 margin-bottom:16px;background:var(--bg);}
@@ -501,6 +511,12 @@ String buildWebOtaPage() {
             "<title>Wine Cabinet</title>"
             "<link rel='stylesheet' href='/style.css'>"
             "</head><body><div class='wrap'>"
+            "<div class='update-banner' id='update-banner'>"
+            "<div class='update-title'>&#x2B06;&nbsp;Update available: <span id='update-version'></span></div>"
+            "<div class='update-notes' id='update-notes'></div>"
+            "<button class='btn-update' id='update-btn' onclick='installUpdate()'>Install Now</button>"
+            "<div id='update-msg' style='margin-top:10px;font-size:.82rem;'></div>"
+            "</div>"
             "<div class='header'>"
             "<div class='icon'>🍷</div>"
             "<h1>Wine Cabinet</h1>"
@@ -806,6 +822,64 @@ String buildWebOtaPage() {
             "})"
             ".catch(function(){btn.disabled=false;});"
             "}"
+            // ── OTA update check ────────────────────────────
+            "var g_updateBinUrl=null;"
+            "function semverNewer(remote,local){"
+            "function parts(v){return v.replace(/^v/,'').split('.').map(Number);}"
+            "var r=parts(remote),l=parts(local);"
+            "for(var i=0;i<3;i++){if((r[i]||0)>(l[i]||0))return true;"
+            "if((r[i]||0)<(l[i]||0))return false;}return false;}"
+            "function checkForUpdate(){"
+            "var LOCAL='" FIRMWARE_VERSION "';"
+            "fetch('https://raw.githubusercontent.com/JensHjort/wine-cabinet-firmware/main/version.json')"
+            ".then(function(r){return r.json();})"
+            ".then(function(d){"
+            "if(semverNewer(d.version,LOCAL)){"
+            "g_updateBinUrl=d.bin_url;"
+            "document.getElementById('update-version').textContent=d.version;"
+            "document.getElementById('update-notes').textContent=d.notes;"
+            "document.getElementById('update-banner').style.display='block';"
+            "}"
+            "}).catch(function(){});"
+            "}"
+            "function installUpdate(){"
+            "if(!g_updateBinUrl)return;"
+            "var btn=document.getElementById('update-btn');"
+            "var msg=document.getElementById('update-msg');"
+            "btn.disabled=true;"
+            "msg.textContent='Downloading firmware...';"
+            "fetch(g_updateBinUrl)"
+            ".then(function(r){"
+            "if(!r.ok)throw new Error('Download failed');"
+            "msg.textContent='Installing...';"
+            "return r.blob();"
+            "})"
+            ".then(function(blob){"
+            "var fd=new FormData();"
+            "fd.append('update',new File([blob],'firmware.bin'));"
+            "var xhr=new XMLHttpRequest();"
+            "xhr.open('POST','/update');"
+            "xhr.upload.onprogress=function(ev){"
+            "if(ev.lengthComputable){"
+            "var p=Math.round(ev.loaded*100/ev.total);"
+            "msg.textContent='Installing... '+p+'%';"
+            "}"
+            "};"
+            "xhr.onload=function(){"
+            "if(xhr.status===200){"
+            "msg.textContent='Update complete — rebooting...';"
+            "document.getElementById('update-banner').style.background='#1a2e1a';"
+            "}else{"
+            "msg.textContent='Install failed ('+xhr.status+').';"
+            "btn.disabled=false;"
+            "}"
+            "};"
+            "xhr.onerror=function(){msg.textContent='Network error.';btn.disabled=false;};"
+            "xhr.send(fd);"
+            "})"
+            ".catch(function(e){msg.textContent=e.message;btn.disabled=false;});"
+            "}"
+            "checkForUpdate();"
             "</script>"
             "</body></html>");
   return html;
