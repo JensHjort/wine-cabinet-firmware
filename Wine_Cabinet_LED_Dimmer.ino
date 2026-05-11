@@ -4,7 +4,9 @@
 #include <ArduinoOTA.h>
 #include <WiFiManager.h>
 #include <ESPmDNS.h>
+#include <Preferences.h>
 #include <time.h>
+#include "version.h"
 
 namespace Config {
 constexpr uint8_t kMosfetPins[] = {16, 17, 26, 27};
@@ -51,6 +53,7 @@ enum class StatusLedMode : uint8_t {
 
 WebServer webServer(80);
 WiFiManager wifiManager;
+Preferences prefs;
 
 ControlMode g_controlMode = ControlMode::kAuto;
 StatusLedMode g_statusLedMode = StatusLedMode::kBooting;
@@ -677,6 +680,8 @@ String buildWebOtaPage() {
             "<div id='msg'></div>"
             "</div>"  // .card
 
+            "<div class='footer'>Firmware version: " FIRMWARE_VERSION "</div>"
+
             "</div>"  // .wrap
 
             "<script>"
@@ -931,12 +936,25 @@ void handleWebUpdateUpload() {
   }
 }
 
+void loadPrefs() {
+  prefs.begin("wine-cab", true);  // read-only
+  g_bothDoorsTimeoutMs = prefs.getULong("door_timeout", 2UL * 60UL * 1000UL);
+  prefs.end();
+}
+
+void saveTimeoutPref() {
+  prefs.begin("wine-cab", false);
+  prefs.putULong("door_timeout", g_bothDoorsTimeoutMs);
+  prefs.end();
+}
+
 void handleWebSetTimeout() {
   const String val = webServer.arg("minutes");
   if (val.length() > 0) {
     const unsigned long minutes = (unsigned long)val.toInt();
     if (minutes >= 1 && minutes <= 60) {
       g_bothDoorsTimeoutMs = minutes * 60UL * 1000UL;
+      saveTimeoutPref();
     }
   }
   webServer.send(200, "text/plain", "OK");
@@ -1108,6 +1126,7 @@ void setup() {
   Serial.begin(115200);
   delay(200);
 
+  loadPrefs();
   setupOutputs();
   setupInputs();
   setStatusLedMode(StatusLedMode::kBooting);
