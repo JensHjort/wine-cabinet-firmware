@@ -1,5 +1,5 @@
 {
-  "version": "v1.0.0",
-  "notes": "Initial release",
+  "version": "v1.0.1",
+  "notes": "Test update — verifying OTA install flow",
   "bin_url": "https://github.com/JensHjort/wine-cabinet-firmware/releases/download/v1.0.0/firmware.bin"
 }
