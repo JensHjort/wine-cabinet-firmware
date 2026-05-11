@@ -1069,9 +1069,9 @@ void serviceWiFiPortal() {
     setStatusLedMode(StatusLedMode::kConnected);
     configTime(Config::kGmtOffsetSec, Config::kDaylightOffsetSec, Config::kNtpServer);
     g_ntpSynced = true;
-    startMdns();
     setupArduinoOta();
     setupWebOta();
+    startMdns();
     Serial.print("Wi-Fi connected. IP: ");
     Serial.println(WiFi.localIP());
   }
@@ -1141,9 +1141,9 @@ void setup() {
     Serial.println(WiFi.localIP());
     configTime(Config::kGmtOffsetSec, Config::kDaylightOffsetSec, Config::kNtpServer);
     g_ntpSynced = true;
-    startMdns();
     setupArduinoOta();
     setupWebOta();
+    startMdns();
   } else {
     Serial.println("Wi-Fi portal active. Connect to configure credentials.");
   }
