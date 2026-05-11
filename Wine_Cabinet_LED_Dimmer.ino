@@ -831,7 +831,7 @@ String buildWebOtaPage() {
             "if((r[i]||0)<(l[i]||0))return false;}return false;}"
             "function checkForUpdate(){"
             "var LOCAL='" FIRMWARE_VERSION "';"
-            "fetch('https://raw.githubusercontent.com/JensHjort/wine-cabinet-firmware/main/version.json')"
+            "fetch('https://raw.githubusercontent.com/JensHjort/wine-cabinet-firmware/master/version.json')"
             ".then(function(r){return r.json();})"
             ".then(function(d){"
             "if(semverNewer(d.version,LOCAL)){"
