@@ -55,6 +55,8 @@ WebServer webServer(80);
 WiFiManager wifiManager;
 Preferences prefs;
 
+char g_hostname[32] = "wine-cabinet";
+
 ControlMode g_controlMode = ControlMode::kAuto;
 StatusLedMode g_statusLedMode = StatusLedMode::kBooting;
 
@@ -664,7 +666,20 @@ String buildWebOtaPage() {
   html += F("</span></div>"
             "</div>"  // .wifi-grid
 
-            "<details class='danger-zone'>"
+            "<div class='sched-row' style='margin-top:16px;'>"
+            "<label style='min-width:110px;'>Device Name</label>"
+            "<input type='text' id='hostname-input' maxlength='31' value='");
+  html += String(g_hostname);
+  html += F("' style='flex:1;border:1px solid var(--line);border-radius:8px;"
+            "padding:8px 10px;font-size:.95rem;background:var(--bg);color:var(--ink);'>"
+            "</div>"
+            "<p style='font-size:.8rem;color:var(--ink-muted);margin:4px 0 10px;'>"
+            "Name shown on your router. Device reboots to apply."
+            "</p>"
+            "<button class='btn' type='button' onclick='saveHostname()'>Save Device Name</button>"
+            "<div id='wifi-msg'></div>"
+
+            "<details class='danger-zone' style='margin-top:16px;'>"
             "<summary>Advanced</summary>"
             "<div class='danger-body'>"
             "<p class='danger-desc'>Erases saved Wi-Fi credentials and reboots into setup mode.</p>"
@@ -673,7 +688,6 @@ String buildWebOtaPage() {
             "</button>"
             "</div>"
             "</details>"
-            "<div id='wifi-msg'></div>"
             "</div>"
 
             "<div class='card'>"
@@ -794,6 +808,15 @@ String buildWebOtaPage() {
             ".then(function(r){return r.text();})"
             ".then(function(){showMsg('sched-msg','success','Schedule saved.');})"
             ".catch(function(){showMsg('sched-msg','error','Save failed.');});"
+            "}"
+            "function saveHostname(){"
+            "var h=document.getElementById('hostname-input').value.trim();"
+            "if(!h||h.length>31){showMsg('wifi-msg','error','Enter a name up to 31 characters.');return;}"
+            "showMsg('wifi-msg','info','Saving — device will reboot...');"
+            "fetch('/set-hostname',{method:'POST',"
+            "headers:{'Content-Type':'application/x-www-form-urlencoded'},"
+            "body:'hostname='+encodeURIComponent(h)})"
+            ".catch(function(){});"
             "}"
             "function resetWifi(){"
             "if(!confirm('Reset Wi-Fi credentials and reboot?'))return;"
@@ -1013,12 +1036,20 @@ void handleWebUpdateUpload() {
 void loadPrefs() {
   prefs.begin("wine-cab", true);  // read-only
   g_bothDoorsTimeoutMs = prefs.getULong("door_timeout", 2UL * 60UL * 1000UL);
+  prefs.getString("hostname", g_hostname, sizeof(g_hostname));
+  if (g_hostname[0] == '\0') strlcpy(g_hostname, "wine-cabinet", sizeof(g_hostname));
   prefs.end();
 }
 
 void saveTimeoutPref() {
   prefs.begin("wine-cab", false);
   prefs.putULong("door_timeout", g_bothDoorsTimeoutMs);
+  prefs.end();
+}
+
+void saveHostnamePref() {
+  prefs.begin("wine-cab", false);
+  prefs.putString("hostname", g_hostname);
   prefs.end();
 }
 
@@ -1032,6 +1063,19 @@ void handleWebSetTimeout() {
     }
   }
   webServer.send(200, "text/plain", "OK");
+}
+
+void handleWebSetHostname() {
+  const String val = webServer.arg("hostname");
+  if (val.length() >= 1 && val.length() <= 31) {
+    strlcpy(g_hostname, val.c_str(), sizeof(g_hostname));
+    saveHostnamePref();
+    webServer.send(200, "text/plain", "OK");
+    delay(100);
+    ESP.restart();
+  } else {
+    webServer.send(400, "text/plain", "Invalid hostname");
+  }
 }
 
 void handleWebCycleMode() {
@@ -1061,6 +1105,7 @@ void setupWebOta() {
   webServer.on("/set-timeout", HTTP_POST, handleWebSetTimeout);
   webServer.on("/schedule", HTTP_POST, handleWebSchedulePost);
   webServer.on("/reset-wifi", HTTP_POST, handleWebResetWifi);
+  webServer.on("/set-hostname", HTTP_POST, handleWebSetHostname);
   webServer.on(
       "/update", HTTP_POST, handleWebUpdateResult, handleWebUpdateUpload);
   webServer.begin();
@@ -1068,7 +1113,7 @@ void setupWebOta() {
 }
 
 void setupArduinoOta() {
-  ArduinoOTA.setHostname(Config::kDeviceName);
+  ArduinoOTA.setHostname(g_hostname);
 
   if (Config::kOtaPassword[0] != '\0') {
     ArduinoOTA.setPassword(Config::kOtaPassword);
@@ -1106,11 +1151,12 @@ void setupArduinoOta() {
 }
 
 void startMdns() {
-  MDNS.begin("wine");              // wine.local (primary — also resolves for OTA)
+  MDNS.begin(g_hostname);
   MDNS.addService("http", "tcp", 80);
 }
 
 void connectWiFi() {
+  WiFi.setHostname(g_hostname);
   wifiManager.setConfigPortalBlocking(false);
   wifiManager.setConfigPortalTimeout(Config::kPortalTimeoutSeconds);
   wifiManager.setAPCallback([](WiFiManager*) {
