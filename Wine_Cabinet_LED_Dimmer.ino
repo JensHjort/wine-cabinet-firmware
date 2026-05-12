@@ -670,11 +670,16 @@ String buildWebOtaPage() {
             "<label style='min-width:110px;'>Device Name</label>"
             "<input type='text' id='hostname-input' maxlength='31' value='");
   html += String(g_hostname);
-  html += F("' style='flex:1;border:1px solid var(--line);border-radius:8px;"
+  html += F("' oninput=\"document.getElementById('hostname-preview').textContent="
+            "this.value.trim()?this.value.trim()+'.local':'';\" "
+            "style='flex:1;border:1px solid var(--line);border-radius:8px;"
             "padding:8px 10px;font-size:.95rem;background:var(--bg);color:var(--ink);'>"
             "</div>"
             "<p style='font-size:.8rem;color:var(--ink-muted);margin:4px 0 10px;'>"
-            "Name shown on your router. Device reboots to apply."
+            "Your device will be reachable at&nbsp;"
+            "<strong id='hostname-preview'>");
+  html += String(g_hostname);
+  html += F(".local</strong>"
             "</p>"
             "<button class='btn' type='button' onclick='saveHostname()'>Save Device Name</button>"
             "<div id='wifi-msg'></div>"
