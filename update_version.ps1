@@ -11,7 +11,7 @@ if (-not $Tag) { $Tag = "v0.0.0-dev" }
 $content = "#pragma once`n#define FIRMWARE_VERSION `"$Tag`"`n"
 Set-Content -Path "$PSScriptRoot\version.h" -Value $content -Encoding utf8
 
-$json = "{\n  `"version`": `"$Tag`",\n  `"notes`": `"See release notes on GitHub`",\n  `"bin_url`": `"https://github.com/Hjort3Design/wine-cabinet-firmware/releases/download/$Tag/firmware.bin`"\n}`n"
+$json = "{\n  `"version`": `"$Tag`",\n  `"notes`": `"See release notes on GitHub`",\n  `"bin_url`": `"https://raw.githubusercontent.com/Hjort3Design/wine-cabinet-firmware/main/releases/$Tag/firmware.bin`"\n}`n"
 Set-Content -Path "$PSScriptRoot\version.json" -Value $json -Encoding utf8
 
 Write-Host "version.h and version.json updated to $Tag"
