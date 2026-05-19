@@ -971,6 +971,8 @@ void handleWebSchedulePost() {
     }
   }
 
+  saveSchedulePref();
+
   Serial.printf("Schedule %s  on=%02u:%02u  off=%02u:%02u  days=0x%02X\n",
                 g_schedEnabled ? "enabled" : "disabled",
                 g_schedOn.hour, g_schedOn.minute,
@@ -1043,6 +1045,13 @@ void loadPrefs() {
   g_bothDoorsTimeoutMs = prefs.getULong("door_timeout", 2UL * 60UL * 1000UL);
   prefs.getString("hostname", g_hostname, sizeof(g_hostname));
   if (g_hostname[0] == '\0') strlcpy(g_hostname, "wine-cabinet", sizeof(g_hostname));
+  // Schedule
+  g_schedEnabled    = prefs.getBool("sched_en",     false);
+  g_schedOn.hour    = prefs.getUChar("sched_on_h",  8);
+  g_schedOn.minute  = prefs.getUChar("sched_on_m",  0);
+  g_schedOff.hour   = prefs.getUChar("sched_off_h", 23);
+  g_schedOff.minute = prefs.getUChar("sched_off_m", 0);
+  g_schedDays       = prefs.getUChar("sched_days",  0x7F);
   prefs.end();
 }
 
@@ -1055,6 +1064,17 @@ void saveTimeoutPref() {
 void saveHostnamePref() {
   prefs.begin("wine-cab", false);
   prefs.putString("hostname", g_hostname);
+  prefs.end();
+}
+
+void saveSchedulePref() {
+  prefs.begin("wine-cab", false);
+  prefs.putBool("sched_en",     g_schedEnabled);
+  prefs.putUChar("sched_on_h",  g_schedOn.hour);
+  prefs.putUChar("sched_on_m",  g_schedOn.minute);
+  prefs.putUChar("sched_off_h", g_schedOff.hour);
+  prefs.putUChar("sched_off_m", g_schedOff.minute);
+  prefs.putUChar("sched_days",  g_schedDays);
   prefs.end();
 }
 
