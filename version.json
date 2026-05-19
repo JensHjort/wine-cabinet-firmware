@@ -1,2 +1,5 @@
-﻿{\n  "version": "v1.1.2",\n  "notes": "See release notes on GitHub",\n  "bin_url": "https://raw.githubusercontent.com/Hjort3Design/wine-cabinet-firmware/main/releases/v1.1.2/firmware.bin"\n}
-
+﻿{
+  "version": "v1.1.2",
+  "notes": "See release notes on GitHub",
+  "bin_url": "https://raw.githubusercontent.com/Hjort3Design/wine-cabinet-firmware/main/releases/v1.1.2/firmware.bin"
+}
