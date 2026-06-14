@@ -19,6 +19,7 @@ constexpr bool kStatusLedActiveHigh = true;
 constexpr uint8_t kDoorSensor1Pin = 18;
 constexpr uint8_t kDoorSensor2Pin = 19;
 constexpr uint8_t kOverrideButtonPin = 21;
+constexpr uint8_t kCycleModeButtonPin = 0;
 
 constexpr uint32_t kPwmFrequencyHz = 5000;
 constexpr uint8_t kPwmResolutionBits = 12;
@@ -71,6 +72,18 @@ bool g_lastRawButtonPressed = false;
 bool g_stableButtonPressed = false;
 unsigned long g_lastButtonChangeMs = 0;
 
+bool g_lastRawCycleButtonPressed = false;
+bool g_stableCycleButtonPressed = false;
+unsigned long g_lastCycleButtonChangeMs = 0;
+
+bool g_lastRawDoor1 = false;
+bool g_stableDoor1 = false;
+unsigned long g_lastDoor1ChangeMs = 0;
+
+bool g_lastRawDoor2 = false;
+bool g_stableDoor2 = false;
+unsigned long g_lastDoor2ChangeMs = 0;
+
 unsigned long g_lastLedToggleMs = 0;
 bool g_statusLedOutput = false;
 unsigned long g_lastReconnectAttemptMs = 0;
@@ -111,16 +124,15 @@ void triggerDebugBlink() {
 }
 
 bool isAnyDoorOpen() {
-  return readActiveLowInput(Config::kDoorSensor1Pin) == false ||
-         readActiveLowInput(Config::kDoorSensor2Pin) == false;
+  return g_stableDoor1 || g_stableDoor2;
 }
 
 bool isDoor1Open() {
-  return readActiveLowInput(Config::kDoorSensor1Pin) == false;
+  return g_stableDoor1;
 }
 
 bool isDoor2Open() {
-  return readActiveLowInput(Config::kDoorSensor2Pin) == false;
+  return g_stableDoor2;
 }
 
 // Returns true if the current local time falls within the allowed window.
@@ -151,8 +163,7 @@ bool isWithinSchedule() {
 bool shouldLightsBeOn() {
   if (g_controlMode == ControlMode::kForceOn)  return true;
   if (g_controlMode == ControlMode::kForceOff) return false;
-  if (g_schedEnabled && !isWithinSchedule())   return false;
-  return isAnyDoorOpen();
+  return isAnyDoorOpen() || (g_schedEnabled && isWithinSchedule());
 }
 
 void writeStatusLed(bool on) {
@@ -294,11 +305,21 @@ void updateFade() {
 }
 
 void handleDoorInputs() {
-  const bool d1 = isDoor1Open();
-  const bool d2 = isDoor2Open();
-  if (d1 != g_lastDoor1 || d2 != g_lastDoor2) {
-    g_lastDoor1 = d1;
-    g_lastDoor2 = d2;
+  const unsigned long now = millis();
+
+  const bool raw1 = !readActiveLowInput(Config::kDoorSensor1Pin);
+  if (raw1 != g_lastRawDoor1) { g_lastRawDoor1 = raw1; g_lastDoor1ChangeMs = now; }
+  if (now - g_lastDoor1ChangeMs >= Config::kButtonDebounceMs && raw1 != g_stableDoor1) {
+    g_stableDoor1 = raw1;
+    g_lastDoor1 = raw1;
+    triggerDebugBlink();
+  }
+
+  const bool raw2 = !readActiveLowInput(Config::kDoorSensor2Pin);
+  if (raw2 != g_lastRawDoor2) { g_lastRawDoor2 = raw2; g_lastDoor2ChangeMs = now; }
+  if (now - g_lastDoor2ChangeMs >= Config::kButtonDebounceMs && raw2 != g_stableDoor2) {
+    g_stableDoor2 = raw2;
+    g_lastDoor2 = raw2;
     triggerDebugBlink();
   }
 }
@@ -341,6 +362,38 @@ void handleOverrideButton() {
   g_stableButtonPressed = rawPressed;
 
   if (!g_stableButtonPressed) {
+    return;
+  }
+
+  switch (g_controlMode) {
+    case ControlMode::kAuto:     g_controlMode = ControlMode::kForceOn;  break;
+    case ControlMode::kForceOn:  g_controlMode = ControlMode::kForceOff; break;
+    case ControlMode::kForceOff: g_controlMode = ControlMode::kAuto;     break;
+  }
+  g_bothDoorsOpenSinceMs = millis();
+  triggerDebugBlink();
+}
+
+void handleCycleModeButton() {
+  const unsigned long now = millis();
+  const bool rawPressed = readActiveLowInput(Config::kCycleModeButtonPin);
+
+  if (rawPressed != g_lastRawCycleButtonPressed) {
+    g_lastRawCycleButtonPressed = rawPressed;
+    g_lastCycleButtonChangeMs = now;
+  }
+
+  if (now - g_lastCycleButtonChangeMs < Config::kButtonDebounceMs) {
+    return;
+  }
+
+  if (rawPressed == g_stableCycleButtonPressed) {
+    return;
+  }
+
+  g_stableCycleButtonPressed = rawPressed;
+
+  if (!g_stableCycleButtonPressed) {
     return;
   }
 
@@ -580,6 +633,7 @@ String buildWebOtaPage() {
             "<span class='slider'></span>"
             "</label>"
             "<span>Enable schedule</span>"
+            "<span style='font-size:.8rem;color:var(--ink-muted);margin-left:8px;opacity:.5;'>Keeps lights on during set hours, even with doors closed.</span>"
             "</div>"
 
             // Day-of-week picker
@@ -1056,7 +1110,7 @@ void loadPrefs() {
   prefs.getString("hostname", g_hostname, sizeof(g_hostname));
   if (g_hostname[0] == '\0') strlcpy(g_hostname, "wine-cabinet", sizeof(g_hostname));
   // Schedule
-  g_schedEnabled    = prefs.getBool("sched_en",     false);
+  g_schedEnabled    = prefs.getUChar("sched_en",    0) != 0;
   g_schedOn.hour    = prefs.getUChar("sched_on_h",  8);
   g_schedOn.minute  = prefs.getUChar("sched_on_m",  0);
   g_schedOff.hour   = prefs.getUChar("sched_off_h", 23);
@@ -1079,7 +1133,7 @@ void saveHostnamePref() {
 
 void saveSchedulePref() {
   prefs.begin("wine-cab", false);
-  prefs.putBool("sched_en",     g_schedEnabled);
+  prefs.putUChar("sched_en",    g_schedEnabled ? 1 : 0);
   prefs.putUChar("sched_on_h",  g_schedOn.hour);
   prefs.putUChar("sched_on_m",  g_schedOn.minute);
   prefs.putUChar("sched_off_h", g_schedOff.hour);
@@ -1250,11 +1304,20 @@ void setupInputs() {
   pinMode(Config::kDoorSensor1Pin, INPUT_PULLUP);
   pinMode(Config::kDoorSensor2Pin, INPUT_PULLUP);
   pinMode(Config::kOverrideButtonPin, INPUT_PULLUP);
+  pinMode(Config::kCycleModeButtonPin, INPUT_PULLUP);
 
   g_lastRawButtonPressed = readActiveLowInput(Config::kOverrideButtonPin);
   g_stableButtonPressed = g_lastRawButtonPressed;
-  g_lastDoor1 = isDoor1Open();
-  g_lastDoor2 = isDoor2Open();
+
+  g_lastRawCycleButtonPressed = readActiveLowInput(Config::kCycleModeButtonPin);
+  g_stableCycleButtonPressed = g_lastRawCycleButtonPressed;
+  g_lastRawDoor1 = !readActiveLowInput(Config::kDoorSensor1Pin);
+  g_stableDoor1  = g_lastRawDoor1;
+  g_lastDoor1    = g_lastRawDoor1;
+
+  g_lastRawDoor2 = !readActiveLowInput(Config::kDoorSensor2Pin);
+  g_stableDoor2  = g_lastRawDoor2;
+  g_lastDoor2    = g_lastRawDoor2;
 }
 
 void setupOutputs() {
@@ -1307,6 +1370,7 @@ void setup() {
 void loop() {
   handleDoorInputs();
   handleOverrideButton();
+  handleCycleModeButton();
   handleBothDoorsOpenTimeout();
   applyLightingState(shouldLightsBeOn());
   updateFade();
